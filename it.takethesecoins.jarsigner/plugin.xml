@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="popup:org.eclipse.jdt.ui.PackageExplorer">
+	      <command
+             commandId="it.takethesecoins.jarsigner.CreateSignedJar"
+             label="%command.label.0"
+             style="push"
+             tooltip="%command.tooltip.0">
+          <visibleWhen>
+			<iterate operator="and" ifEmpty="false">
+      			<adapt type="org.eclipse.core.resources.IResource">
+            		<test property="org.eclipse.core.resources.name" value="*.jardesc"/> 
+      			</adapt>
+   			</iterate>
+          </visibleWhen>
+	      </command>
+      </menuContribution>
+   </extension>
+   <extension
+         point="org.eclipse.ui.commands">
+      <command
+            id="it.takethesecoins.jarsigner.CreateSignedJar"
+            name="%command.name.0">
+      </command>
+   </extension>
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            class="it.takethesecoins.jarsigner.handlers.CreateSignedJarHandler"
+            commandId="it.takethesecoins.jarsigner.CreateSignedJar">
+      </handler>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            class="it.takethesecoins.jarsigner.preferences.JarSignerPreferencePage"
+            id="it.takethesecoins.jarsigner.preferences.JarSignerPreferencePage"
+            name="%page.name.0">
+      </page>
+   </extension>
+   <extension
+         point="org.eclipse.core.runtime.preferences">
+      <initializer
+            class="it.takethesecoins.jarsigner.preferences.PreferenceInitializer">
+      </initializer>
+   </extension>
+
+</plugin>
