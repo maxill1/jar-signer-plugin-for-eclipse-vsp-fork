@@ -3,13 +3,16 @@ package it.takethesecoins.jarsigner.jarsigner;
 import it.takethesecoins.jarsigner.Activator;
 import it.takethesecoins.jarsigner.preferences.PreferenceConstants;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.InvocationTargetException;
-
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import org.eclipse.core.runtime.CoreException;
-import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
@@ -18,7 +21,6 @@ import org.eclipse.core.runtime.SubProgressMonitor;
 import org.eclipse.jdt.internal.ui.JavaPlugin;
 import org.eclipse.jdt.internal.ui.jarpackager.JarFileExportOperation;
 import org.eclipse.jdt.internal.ui.jarpackager.JarPackagerMessages;
-import org.eclipse.jdt.launching.JavaRuntime;
 import org.eclipse.jdt.ui.jarpackager.IJarExportRunnable;
 import org.eclipse.jdt.ui.jarpackager.JarPackageData;
 import org.eclipse.jface.dialogs.MessageDialog;
@@ -29,9 +31,18 @@ import org.eclipse.swt.widgets.Shell;
 public class JarSignerOperation extends JarFileExportOperation implements IJarExportRunnable 
 {
 	protected MessageMultiStatus fStatus;
-    protected JarPackageData fJarPackage;
-    protected JarPackageData fJarPackages[];
-    protected Shell fParentShell;
+	protected JarPackageData fJarPackage;
+	protected JarPackageData fJarPackages[];
+	protected Shell fParentShell;
+	
+	/**
+	 * The absolute path of the keystore
+	 */
+	protected String keystorePath = getPreferences().getString(PreferenceConstants.KEYSTORE);
+	/**
+	 * The absolute path of the jre/jdk
+	 */
+	protected String jdkPath =  PlatformUtils.getDefaultJREPath();
 
 	public JarSignerOperation(JarPackageData[] jarPackages, Shell shell) {
 		super(jarPackages, shell);
@@ -41,86 +52,290 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 	}
 
 	/**
-     * Exports the resources as specified by the JAR package.
-     *
-     * @param       progressMonitor the progress monitor that displays the progress
-     * @see #getStatus()
-     */
-    protected void execute(IProgressMonitor progressMonitor) throws InvocationTargetException, InterruptedException 
-    {
-    	int count= fJarPackages.length;
-    	progressMonitor.beginTask("", count); //$NON-NLS-1$
-    	try {
-    		for (int i= 0; i < count; i++) {
-    			SubProgressMonitor subProgressMonitor= new SubProgressMonitor(progressMonitor, 1, SubProgressMonitor.PREPEND_MAIN_LABEL_TO_SUBTASK);
-                fJarPackage = fJarPackages[i];
-                if(fJarPackage != null)
-    				singleRun(subProgressMonitor);
-    		}
-    	} finally {
-    		progressMonitor.done();
-    	}
-    }
+	 * Exports the resources as specified by the JAR package.
+	 *
+	 * @param       progressMonitor the progress monitor that displays the progress
+	 * @see #getStatus()
+	 */
+	protected void execute(IProgressMonitor progressMonitor) throws InvocationTargetException, InterruptedException 
+	{
+		int count= fJarPackages.length;
+		progressMonitor.beginTask("", count); //$NON-NLS-1$
+		try {
+			for (int i= 0; i < count; i++) {
+				SubProgressMonitor subProgressMonitor= new SubProgressMonitor(progressMonitor, 1, SubProgressMonitor.PREPEND_MAIN_LABEL_TO_SUBTASK);
+				fJarPackage = fJarPackages[i];
+				if(fJarPackage != null)
+					singleRun(subProgressMonitor);
+			}
+		} finally {
+			progressMonitor.done();
+		}
+	}
 
-    protected void singleRun(IProgressMonitor progressMonitor) throws InvocationTargetException, InterruptedException 
-    {
-    	try {
-//    		if (!preconditionsOK())
-//    			throw new InvocationTargetException(null, JarPackagerMessages.getString("JarFileExportOperation.jarCreationFailedSeeDetails")); //$NON-NLS-1$
-    		int totalWork = fJarPackages.length;
-
-    		progressMonitor.beginTask("", totalWork); //$NON-NLS-1$
-
-    		sign();
-
-    	} finally {
-    		progressMonitor.done();
-    	}
-    }
-
-    protected void sign() 
-    {
-    	
-    	//"C:\Program Files (x86)\Java\jdk1.6.0_23\bin\jarsigner.exe" -storetype pkcs12 -keystore X:\Sistema\FirmaCodice201204.p12 -storepass 1985GH$e %1 1
-//    	C:\Program Files (x86)\Java\jdk1.6.0_23\bin\jarsigner  -keystore X:\Sistema\FirmaCodice201204.p12 -storepass 1985GH$e -storetype pkcs12 D:\Test\ResCSO13.jar test
-    	
-    	IPreferenceStore store = Activator.getDefault().getPreferenceStore();
-
-    	String verify = store.getString(PreferenceConstants.VERIFY);
-    	if (verify.equals("") == false) {
-    		verify = " -verify "; 
-    	}
-
-    	String keystore = " -keystore " + store.getString(PreferenceConstants.KEYSTORE);
-    	
-    	String storepass = store.getString(PreferenceConstants.STOREPASS);
-    	if (storepass.equals("") == false) {
-    		storepass = " -storepass " + storepass; 
-    	}
-
-    	String storetype = store.getString(PreferenceConstants.STORETYPE);
-    	if (storetype.equals("") == false) {
-    		storetype = " -storetype " + storetype; //BUG fixed era storepass...
-    	}
-
-    	String alias = store.getString(PreferenceConstants.ALIAS);
-
-        IPath destination = fJarPackage.getJarLocation();
-
-        String options =  storetype + keystore + storepass; //BUG FIX  riposizionato storetype prima di keystore
-        
-        File miJRE = JavaRuntime.getDefaultVMInstall().getInstallLocation();
-        
-        String jre = miJRE.toString();
-        
-    	String command = jre + System.getProperty("file.separator") + "bin" + System.getProperty("file.separator") + "jarsigner " + verify + options + " " + destination.toOSString() + " " + alias;
-    	
-    	System.out.println(command);
-
-    	try {
-
-    		Process miP = Runtime.getRuntime().exec(command);
+	protected void singleRun(IProgressMonitor progressMonitor) throws InvocationTargetException, InterruptedException 
+	{
+		try {
     		
+			int totalWork = fJarPackages.length;
+			progressMonitor.beginTask("", totalWork); //$NON-NLS-1$
+			
+			if (preconditionsOK()){
+				sign();
+			}
+
+		} finally {
+			progressMonitor.done();
+		}
+	}
+
+	/**
+	 * Check if a jdk is installed, etc..
+	 * @return
+	 */
+	private boolean preconditionsOK() {
+		
+		if(!checkJDK()){
+			return false;
+		}
+		
+		if(!checkExecutable()){
+			return false;
+		}
+		
+		if(!checkKeystore()){
+			return false;
+		}
+		
+		//TODO more
+		return true;
+	}
+	
+	/**
+	 * check if a JDK is installed
+	 * @return
+	 */
+	private boolean checkJDK() {
+		try {
+			//verifica se è una JDK
+			if(!PlatformUtils.isRunningJDK()){
+				
+				File[] suitableJDKs = PlatformUtils.findSuitableJDK();
+				
+				String msg = "Eclipse is running with JRE ("+PlatformUtils.getRunningJREPath()+"). \n";
+				
+				if(suitableJDKs!=null && suitableJDKs.length>0){
+					String firstJDK = PlatformUtils.getJRE_bin_fromJDKPath(suitableJDKs[0].getAbsolutePath()); 
+					msg+="Please add -vm\n "+firstJDK+" to your eclipse.ini.";
+				}else{
+					msg+="Please install a Java JDK and add -vm\n C:/Program Files (x86)/Java/jdk1.x.xxx/jre/bin/javaw.exe to your eclipse.ini.";
+				}
+				
+				throw new Exception(msg);
+			}
+			
+			//Verifica se la jre in utilizzo è quella di default
+			if(!PlatformUtils.currentVmAndDefaultEquals()){
+				throw new Exception("No JDK path found or running eclipse with different JDK's JRE (running: "+PlatformUtils.getRunningJREPath()+" default: "+jdkPath+" )");
+			}
+			//controllo se esiste la path
+			if(!new File(jdkPath).exists()){
+				throw new Exception("No JDK path found or running eclipse with different JDK's JRE ("+jdkPath+")");
+			}
+		}catch (Exception e) {
+			addError("Error: a JDK is required. \n Current JRE is not from JDK or you are running a JRE outside JDK main folder", e);
+			return false;
+		}
+		return true;
+	}
+	
+	/**
+	 * Check if jarsigner bin exists
+	 * @return
+	 */
+	private boolean checkExecutable() {
+		try {
+			//controllo se esiste il bin jarsinger
+			if(!new File(jdkPath+PlatformUtils.getExecutable()).exists()){
+				throw new Exception("No jarsigner executable found ("+PlatformUtils.getExecutable()+")");
+			}
+		}catch (Exception e) {
+			addError("Error: missing required executable in "+jdkPath+" \n"+PlatformUtils.getExecutable()+"\n", e);
+			return false;
+		}
+		return true;
+	}
+	
+	/**
+	 * Check if the keystore file exists
+	 * @return
+	 */
+	private boolean checkKeystore() {
+
+		try {
+			//JAR creation failed. See details for additional information.
+			//controllo se esiste il bin keystore
+			if(!new File(keystorePath).exists()){
+				throw new Exception("No keystore file found ("+keystorePath+")");
+			}
+		}catch (Exception e) {
+			addError("Error: cannot find keystore file: \n"+keystorePath+"\n", e);
+			return false;
+		}
+		return true;
+	}
+
+	protected void sign() {
+
+		//    	C:\Program Files (x86)\Java\jdk1.6.0_23\bin\jarsigner  -keystore X:\Sistema\xxx.p12 -storepass xxxx -storetype pkcs12 D:\Test\xxxx.jar test
+		IPreferenceStore store = getPreferences();
+		
+		boolean verify = isVerify();
+
+		ArrayList args = getArgs(store);
+		
+		String executable = PlatformUtils.getExecutable();
+
+//		execute(executable, args);
+		String sign = executeLegacy(jdkPath+executable, args, false); //sempre false per il primo passaggio (firma)
+		String verif = "";
+		if(verify){
+			verif = executeLegacy(jdkPath+executable, args, verify); //in funzione della PreferenceStore
+		}
+		
+		if(verify){
+			if(sign.equals("") && verif.equals("")){
+				MessageDialog.openConfirm(fParentShell, "JAR Exported", "JAR signed and verified sucessfully");
+			}else if(!sign.equals("")){
+				addError("JarSigner Sign error: \n", new Exception(sign));
+			}else if(!verif.equals("")){
+				addError("JarSigner Verify error: \n", new Exception(verif));
+			}else{
+				addError("JarSigner Error: \n", new Exception(sign+"\n "+verif));
+			}
+		}else{
+			if(sign.equals("")){
+				MessageDialog.openConfirm(fParentShell, "JAR Exported", "JAR signed sucessfully");
+			}else{
+				addError("JarSigner Error: \n", new Exception(sign));
+			}
+		}
+	}
+
+
+	/**
+	 * Check if the operation should also verify the jar signing
+	 * @return
+	 */
+	private boolean isVerify() {
+		return getPreferences().getString(PreferenceConstants.VERIFY).equals("true");
+	}
+
+	private IPreferenceStore getPreferences() {
+		return Activator.getDefault().getPreferenceStore();
+	}
+
+
+//	private void execute(String executableOLDTorem, ArrayList args) {
+//
+////		if(!executable.startsWith( "\"") && !executable.endsWith( "\"")){
+////			executable = "\""+executable+"\"";
+////		}
+//		
+//		//        
+//		String executable =  "jarsigner";
+//		if(PlatformUtils.isWindows()){
+//			executable+=".exe";
+//		}
+//		//path della jre
+//		String jdkPath =  PlatformUtils.getDefaultJREPath();
+//		
+//		String command = jdkPath+ executable;
+//		for (Iterator iterator = args.iterator(); iterator.hasNext();) {
+//			String option = (String) iterator.next();
+//			command+= " "+option;
+//		}
+//		
+//		ProcessBuilder probuilder = new ProcessBuilder(command); //executable, args.get(0), args.get(1), args.get(2), args.get(3), args.get(4), args.get(5));
+//		
+//		//You can set up your work directory
+//		probuilder.directory(new File(jdkPath));
+//
+//		Process process = null;
+//		
+//		String error = "";
+//		try {
+//			
+//			process = probuilder.start();
+//
+//			//Read out dir output
+//			InputStream is = process.getInputStream();
+//			InputStreamReader isr = new InputStreamReader(is);
+//			BufferedReader br = new BufferedReader(isr);
+//			String line;
+//			System.out.printf("Output of running %s is:\n", command);
+//			while ((line = br.readLine()) != null) {
+//				System.out.println(line);
+//				if(line.equals("Usage: jarsigner [options] jar-file alias") || error.length()>0){
+//					error+=line+"\n";
+//				}
+//			}
+//			
+//		} catch (Exception e) {
+//			addError("Error signing jar",e);
+//			e.printStackTrace();
+//		}
+//		
+//		//Wait to get exit value
+//		try {
+//			if(process!=null){
+//				int exitValue = process.waitFor();
+//				MessageDialog.openConfirm(fParentShell, "JAR Exported", "JAR signed sucessfully");
+//				System.out.println("\n\nExit Value is " + exitValue);
+//			}
+//		} catch (InterruptedException e) {
+//			addError("Error signing jar",e);
+//			e.printStackTrace();
+//		}
+//		
+//		if(error.length()>0){
+//			addError("Error signing jar", new Exception(error));
+//		}
+//		
+//		System.out.println(probuilder.command());
+//	}
+
+	/**
+	 * @param executable
+	 * @param args
+	 * @param verify 
+	 */
+	private String executeLegacy(String executable, ArrayList originalArgs, boolean verify) {
+		
+		List args = new ArrayList();
+		args.add(executable); //comando eseguibile
+		if(!verify){
+			//aggiunta di tutti i param tranne -verify
+			for (Iterator iterator = originalArgs .iterator(); iterator.hasNext();) {
+				String param = (String) iterator.next();
+				if(!param.equals("-verify")){
+					args.add(param);
+				}
+			}
+		}else{
+			//se c'è bene, altrimenti ciccia
+			args.addAll(originalArgs);
+		}
+		
+		try {
+			
+			String[] arrayArgs = new String[args.size()];
+			for (int i = 0; i < arrayArgs.length; i++) {
+				String param = args.get(i).toString();
+				arrayArgs[i] = param;
+			}
+			Process miP = Runtime.getRuntime().exec(arrayArgs);
+
 			InputStream in = miP.getInputStream();
 			InputStream err = miP.getErrorStream();
 
@@ -130,84 +345,152 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 			sce.start();
 			sci.start();
 
-    		int res = miP.waitFor();
-    		if (res != 0) {
-    			addError(sce.getLog(), null);    			
-    			return;
-    		}
-    		
-    		MessageDialog.openConfirm(fParentShell, "JAR Exported", "JAR signed sucessfully");
+			int res = miP.waitFor();
+			if (res != 0) {
+//				addError(sci.getLog()+"\n " +sce.getLog(), null);    			
+				return sci.getLog()+"\n " +sce.getLog();
+			}
+			
+			if(verify && sci.getLog().toLowerCase().contains("jar is unsigned")){
+				return sci.getLog()+"\n " +sce.getLog();
+			}
 
-    	} catch (Exception e) {
-    		addError("JarFileExportOperation_errorSavingDescription", e);
-    	} catch (Error e) {
-    		addError("JarFileExportOperation_errorSavingDescription", e);
+		} catch (Exception e) {
+			return e.getMessage();
+//			addError("JarFileExportOperation_errorSavingDescription: \n"+executable, e);
+		} catch (Error e) {
+//			addError("JarFileExportOperation_errorSavingDescription: \n"+executable, e);
+			return e.getMessage();
 		}
-    }
-    
-    protected void addToStatus(CoreException ex) {
-        IStatus status= ex.getStatus();
-        String message= ex.getLocalizedMessage();
-        if (message == null || message.length() < 1) {
-                message= "JarFileExportOperation.coreErrorDuringExport"; //$NON-NLS-1$
-                status= new Status(status.getSeverity(), status.getPlugin(), status.getCode(), message, ex);
-        }
-        fStatus.add(status);
-    }
-
-    private void addWarning(String message, Throwable error)
-    {
-        fStatus.add(new Status(2, JavaPlugin.getPluginId(), 10001, message, error));
-    }
-
-    private void addError(String message, Throwable error)
-    {
-        fStatus.add(new Status(4, JavaPlugin.getPluginId(), 10001, message, error));
-    }
-
-    public IStatus getStatus() {
-        String message = null;
-        switch(fStatus.getSeverity())
-        {
-        case 0: // '\0'
-            message = "";
-            break;
-
-        case 1: // '\001'
-            message = JarPackagerMessages.JarFileExportOperation_exportFinishedWithInfo;
-            break;
-
-        case 2: // '\002'
-            message = JarPackagerMessages.JarFileExportOperation_exportFinishedWithWarnings;
-            break;
-
-        case 4: // '\004'
-            if(fJarPackages.length > 1)
-                message = JarPackagerMessages.JarFileExportOperation_creationOfSomeJARsFailed;
-            else
-                message = JarPackagerMessages.JarFileExportOperation_jarCreationFailed;
-            break;
-
-        case 3: // '\003'
-        default:
-            message = "";
-            break;
-        }
-        fStatus.setMessage(message);
-        return fStatus;
+		
+		return "";
 	}
 
-    static class MessageMultiStatus extends MultiStatus
-    {
+	private ArrayList getArgs(IPreferenceStore store) {
 
-        protected void setMessage(String message)
-        {
-            super.setMessage(message);
-        }
+		ArrayList args = new ArrayList();
 
-        MessageMultiStatus(String pluginId, int code, String message, Throwable exception)
-        {
-            super(pluginId, code, message, exception);
-        }
-    }
+		//eseguibile
+
+		//        File miJRE = JavaRuntime.getDefaultVMInstall().getInstallLocation();
+		//        String jre = miJRE.toString();
+		//        String executable =  jre + System.getProperty("file.separator") + "bin" + System.getProperty("file.separator") + "jarsigner";
+		////        if(PlatformUtils.isWindows()){
+		////        	executable+=".exe";
+		////        }
+		////        executable = "\""+executable+"\"";
+		//        args.add(executable);
+
+		//verify
+		String verify = store.getString(PreferenceConstants.VERIFY);
+		if (verify.equals("") == false) {
+			verify = "-verify"; 
+			args.add(verify);
+		}
+
+		//Store type
+		String val = store.getString(PreferenceConstants.STORETYPE);
+		if (val.equals("") == false) {
+			String option = "-storetype"; //BUG fixed era storepass...
+			args.add(option);
+			args.add(val);
+		}
+
+		//keystore
+		args.add("-keystore");
+		args.add(store.getString(PreferenceConstants.KEYSTORE));
+
+		//password
+		val = store.getString(PreferenceConstants.STOREPASS);
+		if (val.equals("") == false) {
+			String option = "-storepass"; 
+			args.add(option);
+			args.add(val);
+		}
+
+		//      String options =  storetype + keystore + storepass; //BUG FIX  riposizionato storetype prima di keystore
+
+		String destination = fJarPackage.getJarLocation().toOSString();
+		args.add(destination);
+
+		//Alias
+		String alias = store.getString(PreferenceConstants.ALIAS);
+		args.add(alias);
+
+
+		//trim degli spazi
+		ArrayList trimmedArgs = new ArrayList();
+		for (Iterator iterator = args.iterator(); iterator.hasNext();) {
+			String string = (String) iterator.next();
+			trimmedArgs.add(string.trim());
+		}
+
+		return trimmedArgs;
+	}
+
+	protected void addToStatus(CoreException ex) {
+		IStatus status= ex.getStatus();
+		String message= ex.getLocalizedMessage();
+		if (message == null || message.length() < 1) {
+			message= "JarFileExportOperation.coreErrorDuringExport"; //$NON-NLS-1$
+			status= new Status(status.getSeverity(), status.getPlugin(), status.getCode(), message, ex);
+		}
+		fStatus.add(status);
+	}
+
+	private void addWarning(String message, Throwable error)
+	{
+		fStatus.add(new Status(2, JavaPlugin.getPluginId(), 10001, message, error));
+	}
+
+	private void addError(String message, Throwable error)
+	{
+		fStatus.add(new Status(4, JavaPlugin.getPluginId(), 10001, message, error));
+	}
+
+	public IStatus getStatus() {
+		String message = null;
+		switch(fStatus.getSeverity())
+		{
+		case 0: // '\0'
+			message = "";
+			break;
+
+		case 1: // '\001'
+			message = JarPackagerMessages.JarFileExportOperation_exportFinishedWithInfo;
+			break;
+
+		case 2: // '\002'
+			message = JarPackagerMessages.JarFileExportOperation_exportFinishedWithWarnings;
+			break;
+
+		case 4: // '\004'
+			if(fJarPackages.length > 1)
+				message = JarPackagerMessages.JarFileExportOperation_creationOfSomeJARsFailed;
+			else
+				message = JarPackagerMessages.JarFileExportOperation_jarCreationFailed;
+			break;
+
+		case 3: // '\003'
+		default:
+			message = "";
+			break;
+		}
+		fStatus.setMessage(message);
+		return fStatus;
+	}
+
+	static class MessageMultiStatus extends MultiStatus
+	{
+
+		protected void setMessage(String message)
+		{
+			super.setMessage(message);
+		}
+
+		MessageMultiStatus(String pluginId, int code, String message, Throwable exception)
+		{
+			super(pluginId, code, message, exception);
+		}
+	}
 }
