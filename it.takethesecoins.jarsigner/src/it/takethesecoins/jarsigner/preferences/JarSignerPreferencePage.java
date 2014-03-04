@@ -44,6 +44,8 @@ public class JarSignerPreferencePage extends FieldEditorPreferencePage implement
 	protected BooleanFieldEditor sectionsonlyEditor = null;
 	protected BooleanFieldEditor protectedEditor = null;
 	protected StringFieldEditor storetypeEditor = null;
+	protected StringFieldEditor customBinEditor = null;
+	
 //	protected StringFieldEditor providernameEditor = null;
 //	protected StringFieldEditor providerclassEditor = null;
 	
@@ -77,6 +79,7 @@ public class JarSignerPreferencePage extends FieldEditorPreferencePage implement
 		internalsfEditor = new BooleanFieldEditor(PreferenceConstants.INTERNALSF, "&Internalsf", getFieldEditorParent());
 		sectionsonlyEditor = new BooleanFieldEditor(PreferenceConstants.SECTIONSONLY, "Sections&only", getFieldEditorParent());
 		protectedEditor = new BooleanFieldEditor(PreferenceConstants.PROTECTED, "protecte&d", getFieldEditorParent());
+		customBinEditor  = new StringFieldEditor(PreferenceConstants.CUSTOMBATCH, "Custom&Bin: ", getFieldEditorParent()); 
 		addField(aliasEditor);
 		addField(keystoreEditor);
 		addField(storepassEditor);
@@ -94,6 +97,7 @@ public class JarSignerPreferencePage extends FieldEditorPreferencePage implement
 		addField(internalsfEditor);
 		addField(sectionsonlyEditor);
 		addField(protectedEditor);
+		addField(customBinEditor);
 	}
 
 	/* (non-Javadoc)
@@ -104,11 +108,17 @@ public class JarSignerPreferencePage extends FieldEditorPreferencePage implement
 	
 	protected void checkState() {
 		super.checkState();
-		if(keystoreEditor.getStringValue()!= null && !keystoreEditor.getStringValue().equals("")){
+		
+		boolean hasKeyStore = keystoreEditor.getStringValue()!= null && !keystoreEditor.getStringValue().equals("");
+		boolean hasCustomBin = customBinEditor.getStringValue()!= null && !customBinEditor.getStringValue().equals("");
+		
+		if(hasKeyStore || hasCustomBin){
 			setErrorMessage(null);
 			setValid(true);
-		}else{
-			setErrorMessage("Keystore cannot be blank!");
+		}
+		
+		if(!hasKeyStore && !hasCustomBin){
+			setErrorMessage("Please put a value in 'Keystore' or in 'Custom bin' (a bat file or sh file that accept 1 argument)");
 			setValid(false);
 		}
 	}

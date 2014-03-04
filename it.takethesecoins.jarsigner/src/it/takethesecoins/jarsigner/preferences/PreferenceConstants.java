@@ -22,4 +22,5 @@ public class PreferenceConstants {
 	public static final String INTERNALSF = "internalsf";
 	public static final String SECTIONSONLY = "sectionsonly";
 	public static final String PROTECTED = "protected";
+	public static final String CUSTOMBATCH = "customcode";
 }

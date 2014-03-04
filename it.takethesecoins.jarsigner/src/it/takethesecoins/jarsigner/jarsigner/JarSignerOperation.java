@@ -3,12 +3,12 @@ package it.takethesecoins.jarsigner.jarsigner;
 import it.takethesecoins.jarsigner.Activator;
 import it.takethesecoins.jarsigner.preferences.PreferenceConstants;
 
-import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -80,8 +80,20 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 			int totalWork = fJarPackages.length;
 			progressMonitor.beginTask("", totalWork); //$NON-NLS-1$
 			
-			if (preconditionsOK()){
+			
+			boolean hasJarsignerDefined = hasJasignerArgs();
+			boolean hasBatch = hasCustomBatch();
+			
+			if (hasJarsignerDefined && preconditionsOK()){
 				sign();
+				
+				if(hasBatch){
+					executeCustomBatch();
+				}
+			}
+			
+			if(!hasJarsignerDefined && hasBatch){
+				executeCustomBatch();
 			}
 
 		} finally {
@@ -89,11 +101,50 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 		}
 	}
 
+	private boolean hasJasignerArgs() {
+		return exists(keystorePath);
+	}
+
+	private boolean exists(String arg) {
+		return arg!=null && arg.trim().length()>0;
+	}
+
+	/**
+	 * Checks if it has custom code to launch
+	 * @return
+	 */
+	private boolean hasCustomBatch() {
+		IPreferenceStore store = getPreferences();
+		String customCode = store.getString(PreferenceConstants.CUSTOMBATCH);
+		if (customCode == null || customCode.trim().length() == 0) {
+			return false;
+		}
+		return true;
+	}
+
+	private void executeCustomBatch() {
+		IPreferenceStore store = getPreferences();
+		String customCode = store.getString(PreferenceConstants.CUSTOMBATCH);
+		if (customCode == null || customCode.trim().length() == 0) {
+			return;
+		}
+		
+		String destination = fJarPackage.getJarLocation().toOSString();
+		
+		String[] args = PlatformUtils.fixBinaryPath(customCode, destination);
+		try {
+			Runtime.getRuntime().exec(args);
+//			MessageDialog.openConfirm(fParentShell, "Custom batch", "executed correctly "+Arrays.toString(args));
+		} catch (IOException e) {
+			addError("Couldn't execute '"+customCode+"' with args '"+destination+"' ", e);
+		}
+	}
+
 	/**
 	 * Check if a jdk is installed, etc..
 	 * @return
 	 */
-	private boolean preconditionsOK() {
+	private boolean preconditionsOK(){
 		
 		if(!checkJDK()){
 			return false;
@@ -143,7 +194,9 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 				throw new Exception("No JDK path found or running eclipse with different JDK's JRE ("+jdkPath+")");
 			}
 		}catch (Exception e) {
-			addError("Error: a JDK is required. \n Current JRE is not from JDK or you are running a JRE outside JDK main folder", e);
+			addError("Error: to use jarsigner binary directly a JDK is required. \n"
+					+ " Current JRE is not a JDK or you are running a JRE outside JDK main folder. \n"
+					+ "You can alternatively launch a bat or sh by usign 'custom bin' in settings. \n", e);
 			return false;
 		}
 		return true;
@@ -153,7 +206,7 @@ public class JarSignerOperation extends JarFileExportOperation implements IJarEx
 	 * Check if jarsigner bin exists
 	 * @return
 	 */
-	private boolean checkExecutable() {
+	private boolean checkExecutable(){
 		try {
 			//controllo se esiste il bin jarsinger
 			if(!new File(jdkPath+PlatformUtils.getExecutable()).exists()){

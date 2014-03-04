@@ -2,6 +2,9 @@ package it.takethesecoins.jarsigner.jarsigner;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.eclipse.jdt.launching.JavaRuntime;
 
@@ -148,5 +151,39 @@ public class PlatformUtils {
 	 */
 	public static String getJDK_bin_fromJDKPath(String absolutePath) {
 		return absolutePath+File.separatorChar+"bin"+File.separatorChar;
+	}
+
+	/**
+	 * Add escapes and fixes common binary names issues
+	 * @param customCode
+	 * @return
+	 */
+	public static String[] fixBinaryPath(String exec, String... arguments) {
+
+		List<String> args = new ArrayList<String>();
+		if(exec.endsWith(".bat")){
+		
+			if(exec.contains("\\")){
+				exec = exec.replace("\\", "/");
+			}
+
+			args.add("cmd");
+			args.add("/c");
+			args.add("start");
+			args.add("jasigner custom code");
+			args.add(exec);
+		}else{
+			args.add(exec);
+		}
+		
+		if(arguments!=null){
+			args.addAll(Arrays.asList(arguments));
+		}
+		
+		String[] array = new String[args.size()];
+		for (int i = 0; i < args.size(); i++) {
+			array[i] = args.get(i);
+		}
+		return array;
 	}
 }
